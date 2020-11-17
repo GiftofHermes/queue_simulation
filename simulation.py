@@ -13,28 +13,48 @@ class Simulation:
         self.event_queue = [] #should be a heapq
         self.num_events = 0
         self.total_wait_time = 0
+        self.max_wait_time = 0
         self.queue_length = 0
+        self.total_arrival = 0
         self.total_served = 0
+
 
 
     def handle_event(self, event):
         event = event[1]
         if event.type == 'arrival':
+            self.total_arrival += 1
             self.queue_length += 1
+            if self.event_queue:
+                max_end_time_event = heapq.nlargest(1,
+                             self.event_queue,
+                             key=lambda x: x[1].end_time)
+                start_time = max_end_time_event[0][1].end_time
+            else:
+                start_time = self.time
             service = (Service(id=self.event_id,
-                                            start_time=self.time,
-                                            duration=lambda: np.random.randint(5,15))
+                               event_time=self.time,
+                               start_time=start_time,
+                               duration=lambda: np.random.randint(6,10))
                         )
             heapq.heappush(self.event_queue, (service.end_time, service))
             self.event_id += 1
         if event.type == 'service':
             self.queue_length -=1
+            self.total_wait_time += self.time - event.event_time
+            if self.max_wait_time < self.time - event.event_time:
+                self.max_wait_time = self.time - event.event_time
             self.time += event.duration
             self.total_served += 1
         return self
 
     def __str__(self):
-        return f'Time: {self.time}\n queue_length: {self.queue_length}'
+        return (f'Time: {self.time}\n'
+               f'queue_length: {self.queue_length}\n'
+               f'wait_time: {self.total_wait_time}\n'
+               f'average_wait_time: {self.total_wait_time / self.total_arrival}\n'
+               f'max_wait_time: {self.max_wait_time}'
+              )
 
 class Event(ABC):
     """
@@ -42,8 +62,9 @@ class Event(ABC):
     """
     type: str = NotImplemented
 
-    def __init__(self, id, start_time, duration=lambda: 0):
+    def __init__(self, id, event_time, start_time, duration=lambda: 0):
         self.id = id
+        self.event_time = event_time
         self.start_time = start_time
         self.duration = duration() # may change to a function
         self.end_time = self.start_time + self.duration
